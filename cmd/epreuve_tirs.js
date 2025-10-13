@@ -41,7 +41,7 @@ async function analyserTir(texte, repondre) {
 }
 
 ovlcmd({
-  nom_cmd: 'exercice4',
+  nom_cmd: 'exercice1',
   classe: 'BLUELOCK⚽',
   react: '⚽',
   desc: "Lance l'épreuve du loup"
