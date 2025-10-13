@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/Ainz-fo/NEO-BOT-MD.git /ovl_bot
+RUN git clone https://github.com/ghost55w/NEO-2.5.git /ovl_bot
 
 WORKDIR /ovl_bot
 
