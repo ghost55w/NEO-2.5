@@ -340,6 +340,35 @@ function validerTirTexte(texte, joueur) {
   return { valide, raisonRefus, missed: false, tir_type: trouveType, tir_zone: trouveZone };
 }
 
+ovlcmd({ nom: "tir", categorie: "football" }, async (ctx) => {
+  const { ms_org, text, sender } = ctx;
+  const joueur = joueurs.get(sender) || { id: sender };
+
+  // Détection de frappe simulée (ex: l'utilisateur interagit)
+  joueurCommenceAEcrire(joueur);
+
+  // ⚽ emoji : analyse en cours
+  await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
+
+  // Vérifier pavé trop rapide et copier-collé
+  if (estCopieColleRapide(joueur, text)) {
+    await ovl.sendMessage(ms_org, { text: "❌ Missed Goal! Pavé copié-collé détecté.", react: { text: "⚠️" } });
+    return;
+  }
+
+  // Ajouter le pavé à l'historique
+  joueur.historiquePaves = joueur.historiquePaves || [];
+  joueur.historiquePaves.push(text);
+
+  // Ensuite, on peut lancer l'analyse du tir
+  const { analyse, validation } = await enqueue(async () => ({
+    analyse: await analyserTir(text),
+    validation: validerTirTexte(text, joueur)
+  }));
+
+  // ... suite : Goal / Missed / historique interactif
+});
+
 // Calcul classement
 function calculerClassement() {
   return Array.from(joueurs.values())
