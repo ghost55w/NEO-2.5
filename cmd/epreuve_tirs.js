@@ -61,6 +61,59 @@ Répond uniquement en JSON strict.
   }
 }
 
+// --- Commande d'exercice ---
+ovlcmd({
+  nom_cmd: 'exercice1',
+  classe: 'BLUELOCK⚽',
+  react: '⚽',
+  desc: "Lance l'épreuve de tirs"
+}, async (ms_org, ovl, { repondre, auteur_Message }) => {
+  try {
+    await ovl.sendMessage(ms_org, { video: { url: 'https://files.catbox.moe/z64kuq.mp4' }, gifPlayback: true });
+
+    const texteDebut = `*🔷ÉPREUVE DE TIRS⚽🥅*
+Souhaitez-vous lancer l'exercice ? :
+✅ Oui
+❌ Non
+⚽BLUE🔷LOCK`;
+
+    await ovl.sendMessage(ms_org, { image: { url: 'https://files.catbox.moe/09rll9.jpg' }, caption: texteDebut });
+
+    const rep = await ovl.recup_msg({ auteur: auteur_Message, ms_org, temps: 60000 });
+    const response = rep?.message?.extendedTextMessage?.text || rep?.message?.conversation;
+    if (!response) return repondre("⏳Pas de réponse, épreuve annulée.");
+    if (response.toLowerCase() === "non") return repondre("❌ Lancement de l'exercice annulé...");
+
+    if (response.toLowerCase() === "oui") {
+      const id = auteur_Message;
+      const joueur = {
+        id,
+        tir_info: [],
+        but: 0,
+        tirs_total: 0,
+        en_cours: true,
+        paused: false,
+        remainingTime: 20 * 60 * 1000,
+        pauseTimestamp: null,
+        timer: null
+      };
+
+      joueurs.set(id, joueur);
+      startTimer(joueur, ms_org, ovl);
+
+      await ovl.sendMessage(ms_org, {
+        video: { url: "https://files.catbox.moe/zqm7et.mp4" },
+        gifPlayback: true,
+        caption: `*⚽BLUE LOCK🔷:* Début de l'exercice ⌛ Durée : 20:00 mins`
+      });
+    }
+  } catch (err) {
+    repondre("❌ Une erreur est survenue.");
+    console.error(err);
+  }
+});
+
+
 // Validation du tir + conditions spéciales
 function validerTirTexte(texte) {
   texte = texte.toLowerCase();
@@ -156,7 +209,7 @@ ovlcmd({ nom: "tir", categorie: "football" }, async (ctx) => {
 
   if (!validation.valide) {
     // Tir raté
-    const gifMissed = "https://media.giphy.com/media/xT9IgG50Fb7Mi0prBC/giphy.gif";
+    const gifMissed = "https://files.catbox.moe/x5skj8.mp4" ;
     await ovl.sendMessage(ms_org, {
       text: validation.raisonRefus || "❌ Missed Goal!",
       gif: { url: gifMissed, loop: true }
@@ -167,7 +220,7 @@ ovlcmd({ nom: "tir", categorie: "football" }, async (ctx) => {
   // Tir réussi
   joueur.score++;
   joueur.essais++;
-  const gifGoal = "https://media.giphy.com/media/3o6fJbnUnh0slpY5JS/giphy.gif";
+  const gifGoal = "https://files.catbox.moe/pad98d.mp4" ;
   await ovl.sendMessage(ms_org, {
     text: `✅ Goal! Score: ${joueur.score} pts`,
     gif: { url: gifGoal, loop: true }
