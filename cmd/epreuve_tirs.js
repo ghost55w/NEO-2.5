@@ -197,6 +197,76 @@ function validerTirTexte(texte) {
   return { valide, raisonRefus, missed: false };
 }
 
+function validerTirTexte(texte, joueur) {
+  texte = texte.toLowerCase();
+  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
+  const tir_parties = ["intérieur du pied", "extérieur du pied", "cou de pied", "pointe du pied", "talon", "tête"];
+  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
+
+  const trouveType = tir_types.find(t => texte.includes(t));
+  const trouvePartie = tir_parties.find(t => texte.includes(t));
+  const trouveZone = tir_zones.find(t => texte.includes(t));
+
+  // Vérification répétition tir_type / tir_zone
+  const dernierTir = joueur.historique?.[joueur.historique.length - 1];
+  if (dernierTir) {
+    if (trouveType && dernierTir.tir_type === trouveType) {
+      return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir_type répété." };
+    }
+    if (trouveZone && dernierTir.tir_zone === trouveZone) {
+      return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir_zone répété." };
+    }
+  }
+
+  let valide = trouveType && trouveZone;
+  let raisonRefus = "";
+
+  if (texte.includes("tir") && (!trouveType || !trouveZone)) {
+    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir incomplet." };
+  }
+
+  function courbeValide(txt) {
+    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(\.\d+)?) ?(m|cm)/);
+    if (!match) return false;
+    let val = parseFloat(match[2]);
+    if (match[4] === "cm") val /= 100;
+    return val <= 2;
+  }
+
+  // Cas spéciaux Trivela / Tir enroulé
+  const checkSpecial = (typeTir, pied, corpsAttendu) => {
+    const corpsOk = texte.includes(corpsAttendu);
+    const courbeOk = courbeValide(texte);
+    if (!corpsOk || !courbeOk) {
+      valide = false;
+      raisonRefus = `❌ ${typeTir} ${pied} invalide : corps ${corpsAttendu} + courbe ≤ 2m.`;
+    }
+  };
+
+  if (texte.includes("trivela")) {
+    if (texte.includes("pied droit")) checkSpecial("Trivela", "pied droit", "60° à gauche");
+    else if (texte.includes("pied gauche")) checkSpecial("Trivela", "pied gauche", "60° à droite");
+  }
+
+  if (texte.includes("tir enroulé")) {
+    if (texte.includes("pied droit")) checkSpecial("Enroulé", "pied droit", "60° à droite");
+    else if (texte.includes("pied gauche")) checkSpecial("Enroulé", "pied gauche", "60° à gauche");
+  }
+
+  return { valide, raisonRefus, missed: false, tir_type: trouveType, tir_partie: trouvePartie, tir_zone: trouveZone };
+}
+
+// Fonction pour montrer que le bot analyse le tir en "temps réel"
+async function montrerAnalyseEnCours(ms_org, ovl) {
+  // On envoie un emoji ⚽ pour signaler que le bot "analyse"
+  const analyseMsg = await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
+
+  // Optionnel : si la plateforme le permet, on peut animer ou remplacer l'emoji après l'analyse
+  // return analyseMsg pour pouvoir mettre à jour le message plus tard si nécessaire
+  return analyseMsg;
+                                                    }
+
+
 // Calcul classement
 function calculerClassement() {
   return Array.from(joueurs.values())
