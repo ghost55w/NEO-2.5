@@ -1,34 +1,6 @@
 const { ovlcmd } = require('../lib/ovlcmd');
 const axios = require('axios');
 const joueurs = new Map();
-const cacheAnalyse = new Map();
-const queue = [];
-const MAX_CONCURRENCY = 10;
-let activeTasks = 0;
-
-// File d’attente pour analyser les tirs
-async function enqueue(taskFn) {
-  return new Promise(resolve => {
-    queue.push({ taskFn, resolve });
-    processQueue();
-  });
-}
-
-async function processQueue() {
-  if (activeTasks >= MAX_CONCURRENCY || queue.length === 0) return;
-  const { taskFn, resolve } = queue.shift();
-  activeTasks++;
-  try {
-    const result = await taskFn();
-    resolve(result);
-  } catch (e) {
-    console.error('Erreur worker:', e);
-    resolve(null);
-  } finally {
-    activeTasks--;
-    processQueue();
-  }
-}
 
 // Analyse du tir via Gemini avec cache
 async function analyserTir(texte) {
@@ -66,18 +38,41 @@ ovlcmd({
   nom_cmd: 'exercice1',
   classe: 'BLUELOCK⚽',
   react: '⚽',
-  desc: "Lance l'épreuve de tirs"
+  desc: "Lance l'épreuve du loup"
 }, async (ms_org, ovl, { repondre, auteur_Message }) => {
   try {
-    await ovl.sendMessage(ms_org, { video: { url: 'https://files.catbox.moe/z64kuq.mp4' }, gifPlayback: true });
+    await ovl.sendMessage(ms_org, {
+      video: { url: 'https://files.catbox.moe/z64kuq.mp4' },
+      gifPlayback: true,
+      caption: ''
+    });
 
     const texteDebut = `*🔷ÉPREUVE DE TIRS⚽🥅*
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔░▒▒▒▒░░▒░
+
+                   🔷⚽RÈGLES:
+Dans cet exercice l'objectif est de marquer 18 buts en 18 tirs max dans le temps imparti ❗20 mins⌛ face à un gardien Robot qui  mémorise vos tirs pour bloquer le même tir de suite. ⚠Vous devez marquer au moins 6 buts sinon vous êtes éliminé ❌. 
+
+⚠SI VOUS RATEZ UN TIR, FIN DE L'EXERCICE ❌.
+
+▔▔▔▔▔▔▔ 🔷RANKING🏆 ▔▔▔▔▔▔▔  
+                       
+🥉Novice: 6 buts⚽ (25 pts) 
+🥈Pro: 12 buts⚽ (50 pts) 
+🥇Classe mondiale: 18 buts⚽🏆(100 pts) 
+
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔░ ░                         
+
 Souhaitez-vous lancer l'exercice ? :
 ✅ Oui
 ❌ Non
-⚽BLUE🔷LOCK`;
 
-    await ovl.sendMessage(ms_org, { image: { url: 'https://files.catbox.moe/09rll9.jpg' }, caption: texteDebut });
+                         ⚽BLUE🔷LOCK`;
+
+    await ovl.sendMessage(ms_org, {
+      image: { url: 'https://files.catbox.moe/09rll9.jpg' },
+      caption: texteDebut
+    });
 
     const rep = await ovl.recup_msg({ auteur: auteur_Message, ms_org, temps: 60000 });
     const response = rep?.message?.extendedTextMessage?.text || rep?.message?.conversation;
@@ -86,20 +81,26 @@ Souhaitez-vous lancer l'exercice ? :
 
     if (response.toLowerCase() === "oui") {
       const id = auteur_Message;
-      const joueur = {
+      const timer = setTimeout(() => {
+        if (joueurs.has(id)) {
+          joueurs.get(id).en_cours = false;
+          envoyerResultats(ms_org, ovl, joueurs.get(id));
+        }
+      }, 20 * 60 * 1000);
+
+      joueurs.set(id, {
         id,
+        tir_type: null,
+        tir_zone: null,
         tir_info: [],
         but: 0,
         tirs_total: 0,
         en_cours: true,
+        timer,
         paused: false,
         remainingTime: 20 * 60 * 1000,
-        pauseTimestamp: null,
-        timer: null
-      };
-
-      joueurs.set(id, joueur);
-      startTimer(joueur, ms_org, ovl);
+        pauseTimestamp: null
+      });
 
       await ovl.sendMessage(ms_org, {
         video: { url: "https://files.catbox.moe/zqm7et.mp4" },
