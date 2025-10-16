@@ -208,7 +208,7 @@ function validerTirTexte(texte, joueur) {
   const trouveZone = tir_zones.find(t => texte.includes(t));
 
   // Vérification répétition tir_type / tir_zone
-  const dernierTir = joueur.historique?.[joueur.historique.length - 1];
+  const dernierTir = joueur.historique?.[joueur.historique.length - 2];
   if (dernierTir) {
     if (trouveType && dernierTir.tir_type === trouveType) {
       return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir_type répété." };
