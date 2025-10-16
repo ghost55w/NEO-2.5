@@ -129,6 +129,8 @@ Souhaitez-vous lancer l'exercice ? :
   }
 });
 
+// ⚽ emoji : analyse en cours
+  await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
 
 // Validation du tir + conditions spéciales
 function validerTirTexte(texte) {
@@ -397,17 +399,6 @@ function validerTirTexte(texte, joueur) {
 ovlcmd({ nom: "tir", categorie: "football" }, async (ctx) => {
   const { ms_org, text, sender } = ctx;
   const joueur = joueurs.get(sender) || { id: sender };
-
-
-  // ⚽ emoji : analyse en cours
-  await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
-
-  // Vérifier pavé trop rapide et copier-collé
-  if (estCopieColleRapide(joueur, text)) {
-    await ovl.sendMessage(ms_org, { text: "❌ Missed Goal! Pavé copié-collé détecté.", react: { text: "⚠️" } });
-    return;
-  }
-
   
 // Calcul classement
 function calculerClassement() {
