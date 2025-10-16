@@ -135,99 +135,59 @@ async function montrerAnalyseEnCours(ms_org, ovl) {
   await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
 }
 
-// Validation du tir + conditions spéciales
-function validerTirTexte(texte) {
-  texte = texte.toLowerCase();
-  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
-  const tir_parties = ["intérieur du pied", "extérieur du pied", "cou de pied", "pointe du pied", "talon", "tête"];
-  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
-
-  const trouveType = tir_types.some(t => texte.includes(t));
-  const trouvePartie = tir_parties.some(t => texte.includes(t));
-  const trouveZone = tir_zones.some(t => texte.includes(t));
-
-  let valide = trouveType && trouvePartie && trouveZone;
-  let raisonRefus = "";
-
-  if (texte.includes("tir") && (!trouveType || !trouvePartie || !trouveZone)) {
-    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal!" };
-  }
-
-  function courbeValide(txt) {
-    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(\.\d+)?) ?(m|cm)/);
-    if (!match) return false;
-    let val = parseFloat(match[2]);
-    if (match[5] === "cm") val /= 100;
-    return val <= 2;
-  }
-
-  // Trivela
-  if (texte.includes("trivela")) {
-    if (texte.includes("pied droit")) {
-      const corpsOk = texte.includes("60° à gauche") || texte.includes("60 degres à gauche");
-      const courbeOk = courbeValide(texte);
-      if (!corpsOk || !courbeOk) {
-        valide = false;
-        raisonRefus = "❌ Trivela pied droit invalide : corps 60° à gauche + courbe ≤ 2m.";
-      }
-    } else if (texte.includes("pied gauche")) {
-      const corpsOk = texte.includes("60° à droite") || texte.includes("60 degres à droite");
-      const courbeOk = courbeValide(texte);
-      if (!corpsOk || !courbeOk) {
-        valide = false;
-        raisonRefus = "❌ Trivela pied gauche invalide : corps 60° à droite + courbe ≤ 2m.";
-      }
-    }
-  }
-
-  // Tir enroulé
-  if (texte.includes("tir enroulé")) {
-    if (texte.includes("pied droit")) {
-      const corpsOk = texte.includes("60° à droite") || texte.includes("60 degres à droite");
-      const courbeOk = courbeValide(texte);
-      if (!corpsOk || !courbeOk) {
-        valide = false;
-        raisonRefus = "❌ Enroulé pied droit invalide : corps 60° à droite + courbe ≤ 2m.";
-      }
-    } else if (texte.includes("pied gauche")) {
-      const corpsOk = texte.includes("60° à gauche") || texte.includes("60 degres à gauche");
-      const courbeOk = courbeValide(texte);
-      if (!corpsOk || !courbeOk) {
-        valide = false;
-        raisonRefus = "❌ Enroulé pied gauche invalide : corps 60° à gauche + courbe ≤ 2m.";
-      }
-    }
-  }
-
-  return { valide, raisonRefus, missed: false };
-}
-
-function validerTirTexte(texte, joueur) {
-  texte = texte.toLowerCase();
-  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
-  const tir_parties = ["intérieur du pied", "extérieur du pied", "cou de pied", "pointe du pied", "talon", "tête"];
-  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
-
-  const trouveType = tir_types.find(t => texte.includes(t));
-  const trouvePartie = tir_parties.find(t => texte.includes(t));
-  const trouveZone = tir_zones.find(t => texte.includes(t));
-
-  let valide = trouveType && trouveZone;
-  let raisonRefus = "";
-
-  if (texte.includes("tir") && (!trouveType || !trouveZone)) {
+  // Vérification obligatoire
+  if (!trouveType || !trouvePartie || !trouveZone) {
     return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir incomplet." };
   }
 
+  // Initialiser historique de répétition si absent
+  if (!joueur.repeatHistory) {
+    joueur.repeatHistory = { types: [], zones: [] };
+  }
+
+  // Gestion des répétitions tir_type
+  const updateProb = (history, current) => {
+    history.push(current);
+    if (history.length > 4) history.shift(); // garder max 4 derniers
+
+    let count = 1;
+    for (let i = history.length - 2; i >= 0; i--) {
+      if (history[i] === current) count++;
+      else break;
+    }
+    return count;
+  };
+
+  const tirTypeCount = updateProb(joueur.repeatHistory.types, trouveType);
+  const tirZoneCount = updateProb(joueur.repeatHistory.zones, trouveZone);
+
+  const chanceSelonRepetition = (count) => {
+    switch (count) {
+      case 1: return 1.0;   // 100%
+      case 2: return 0.9;   // 90%
+      case 3: return 0.7;   // 70%
+      default: return 0.1;  // 4ᵉ ou plus → 10%
+    }
+  };
+
+  // Tir aléatoire basé sur répétition
+  const random = Math.random();
+  const typeOk = random <= chanceSelonRepetition(tirTypeCount);
+  const zoneOk = random <= chanceSelonRepetition(tirZoneCount);
+
+  let valide = typeOk && zoneOk;
+  let raisonRefus = "";
+  if (!valide) raisonRefus = "❌ Missed Goal! Probabilité réduite par répétition.";
+
+  // Cas spéciaux Trivela / Tir enroulé
   function courbeValide(txt) {
-    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(\.\d+)?) ?(m|cm)/);
+    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(.\d+)?) ?(m|cm)/);
     if (!match) return false;
     let val = parseFloat(match[2]);
     if (match[4] === "cm") val /= 100;
     return val <= 2;
   }
 
-  // Cas spéciaux Trivela / Tir enroulé
   const checkSpecial = (typeTir, pied, corpsAttendu) => {
     const corpsOk = texte.includes(corpsAttendu);
     const courbeOk = courbeValide(texte);
@@ -247,34 +207,14 @@ function validerTirTexte(texte, joueur) {
     else if (texte.includes("pied gauche")) checkSpecial("Enroulé", "pied gauche", "60° à gauche");
   }
 
-  return { valide, raisonRefus, missed: false, tir_type: trouveType, tir_partie: trouvePartie, tir_zone: trouveZone };
-}
-                                                   
-function validerTirTexte(texte, joueur) {
-  texte = texte.toLowerCase();
-  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
-  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
-
-  const trouveType = tir_types.find(t => texte.includes(t));
-  const trouveZone = tir_zones.find(z => texte.includes(z));
-
-  let valide = !!trouveType && !!trouveZone;
-  let raisonRefus = "";
-
-  if (!joueur.repeatHistory) {
-    joueur.repeatHistory = { types: [], zones: [] };
-  }
-
-  function validerTirTexte(texte, joueur) {
-  texte = texte.toLowerCase();
-  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
-  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
-
-  const trouveType = tir_types.find(t => texte.includes(t));
-  const trouveZone = tir_zones.find(z => texte.includes(z));
-
-  let valide = !!trouveType && !!trouveZone;
-  let raisonRefus = "";
+  return { 
+    valide, 
+    raisonRefus, 
+    missed: !valide, 
+    tir_type: trouveType, 
+    tir_partie: trouvePartie, 
+    tir_zone: trouveZone 
+  };
 
   // Initialiser l'historique si absent
   if (!joueur.repeatHistory) {
@@ -296,146 +236,18 @@ function validerTirTexte(texte, joueur) {
     joueur.repeatHistory = { derniersPaves: [] };
   }
 
-  // --- Gestion des pavés répétés ---
-  const pavé = texte.trim();
-  const derniers = joueur.repeatHistory.derniersPaves;
+ function validerTirTexte(texte, joueur) {
+  texte = texte.toLowerCase();
 
-  // On garde en mémoire les 3 derniers pavés
-  derniers.push(pavé);
-  if (derniers.length > 3) derniers.shift();
+  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
+  const tir_parties = ["intérieur du pied", "extérieur du pied", "cou de pied", "pointe du pied", "talon", "tête"];
+  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
 
-  // Vérifier si pavé répété
-  const repetitionCount =
-    derniers.length >= 2 && derniers[derniers.length - 1] === derniers[derniers.length - 2]
-      ? (derniers.length >= 3 && derniers[derniers.length - 2] === derniers[derniers.length - 3] ? 3 : 2)
-      : 1;
+  const trouveType = tir_types.find(t => texte.includes(t));
+  const trouvePartie = tir_parties.find(t => texte.includes(t));
+  const trouveZone = tir_zones.find(z => texte.includes(z));
 
-  // --- ⚡ Réinitialisation après 2 tirs différents ---
-  if (derniers.length >= 2 && derniers[derniers.length - 1] !== derniers[derniers.length - 2]) {
-    joueur.repeatHistory.derniersPaves = [pavé];
-  }
-
-  // --- 🎯 Application des chances selon répétition ---
-  let chance = 100;
-  if (repetitionCount === 1) chance = 90;
-  else if (repetitionCount === 2) chance = 60;
-  else if (repetitionCount === 3) chance = 10;
-
-  // Tir aléatoire basé sur la chance
-  const tirReussi = Math.random() * 100 < chance;
-
-  if (!tirReussi) {
-    return { valide: false, missed: true, raisonRefus: `❌ Missed Goal! (probabilité ${chance}%)` };
-  }
-
-  // --- ⚠️ Tir incomplet ---
-  if (texte.includes("tir") && (!trouveType || !trouveZone)) {
-    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir incomplet." };
-  }
-
-  // --- ⚽ Cas spéciaux trivela / enroulé ---
-  function courbeValide(txt) {
-    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(\.\d+)?) ?(m|cm)/);
-    if (!match) return false;
-    let val = parseFloat(match[2]);
-    if (match[4] === "cm") val /= 100;
-    return val <= 2;
-  }
-
-  const checkSpecial = (typeTir, pied, corpsAttendu) => {
-    const corpsOk = texte.includes(corpsAttendu);
-    const courbeOk = courbeValide(texte);
-    if (!corpsOk || !courbeOk) {
-      valide = false;
-      raisonRefus = `❌ ${typeTir} ${pied} invalide : corps ${corpsAttendu} + courbe ≤ 2m.`;
-    }
-  };
-
-  if (texte.includes("trivela")) {
-    if (texte.includes("pied droit")) checkSpecial("Trivela", "pied droit", "60° à gauche");
-    else if (texte.includes("pied gauche")) checkSpecial("Trivela", "pied gauche", "60° à droite");
-  }
-
-  if (texte.includes("tir enroulé")) {
-    if (texte.includes("pied droit")) checkSpecial("Enroulé", "pied droit", "60° à droite");
-    else if (texte.includes("pied gauche")) checkSpecial("Enroulé", "pied gauche", "60° à gauche");
-  }
-
-  if (!valide) return { valide: false, missed: true, raisonRefus };
-  return { valide: true, missed: false, tir_type: trouveType, tir_zone: trouveZone };
-}
-
-  // --- ⚠️ Tir incomplet ---
-  if (texte.includes("tir") && (!trouveType || !trouveZone)) {
-    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir incomplet." };
-  }
-
-  // --- ⚽ Cas spéciaux trivela / enroulé ---
-  function courbeValide(txt) {
-    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(\.\d+)?) ?(m|cm)/);
-    if (!match) return false;
-    let val = parseFloat(match[2]);
-    if (match[4] === "cm") val /= 100;
-    return val <= 2;
-  }
-
-  const checkSpecial = (typeTir, pied, corpsAttendu) => {
-    const corpsOk = texte.includes(corpsAttendu);
-    const courbeOk = courbeValide(texte);
-    if (!corpsOk || !courbeOk) {
-      valide = false;
-      raisonRefus = `❌ ${typeTir} ${pied} invalide : corps ${corpsAttendu} + courbe ≤ 2m.`;
-    }
-  };
-
-  if (texte.includes("trivela")) {
-    if (texte.includes("pied droit")) checkSpecial("Trivela", "pied droit", "60° à gauche");
-    else if (texte.includes("pied gauche")) checkSpecial("Trivela", "pied gauche", "60° à droite");
-  }
-
-  if (texte.includes("tir enroulé")) {
-    if (texte.includes("pied droit")) checkSpecial("Enroulé", "pied droit", "60° à droite");
-    else if (texte.includes("pied gauche")) checkSpecial("Enroulé", "pied gauche", "60° à gauche");
-  }
-
-  return { valide, raisonRefus, missed: false, tir_type: trouveType, tir_zone: trouveZone };
-      } 
-
-  // Cas spéciaux trivela / enroulé
-  function courbeValide(txt) {
-    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(\.\d+)?) ?(m|cm)/);
-    if (!match) return false;
-    let val = parseFloat(match[2]);
-    if (match[4] === "cm") val /= 100;
-    return val <= 2;
-  }
-
-  const checkSpecial = (typeTir, pied, corpsAttendu) => {
-    const corpsOk = texte.includes(corpsAttendu);
-    const courbeOk = courbeValide(texte);
-    if (!corpsOk || !courbeOk) {
-      valide = false;
-      raisonRefus = `❌ ${typeTir} ${pied} invalide : corps ${corpsAttendu} + courbe ≤ 2m.`;
-    }
-  };
-
-  if (texte.includes("trivela")) {
-    if (texte.includes("pied droit")) checkSpecial("Trivela", "pied droit", "60° à gauche");
-    else if (texte.includes("pied gauche")) checkSpecial("Trivela", "pied gauche", "60° à droite");
-  }
-
-  if (texte.includes("tir enroulé")) {
-    if (texte.includes("pied droit")) checkSpecial("Enroulé", "pied droit", "60° à droite");
-    else if (texte.includes("pied gauche")) checkSpecial("Enroulé", "pied gauche", "60° à gauche");
-  }
-
-  return { valide, raisonRefus, missed: false, tir_type: trouveType, tir_zone: trouveZone };
-}
-
-ovlcmd({ nom: "tir", categorie: "football" }, async (ctx) => {
-  const { ms_org, text, sender } = ctx;
-  const joueur = joueurs.get(sender) || { id: sender };
-  
+   
 // Calcul classement
 function calculerClassement() {
   return Array.from(joueurs.values())
