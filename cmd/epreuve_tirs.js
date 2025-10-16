@@ -281,39 +281,89 @@ function validerTirTexte(texte, joueur) {
     joueur.repeatHistory = { types: [], zones: [] };
   }
 
-  // --- 🔁 Gestion des répétitions tir_type et tir_zone ---
-  if (trouveType) {
-    joueur.repeatHistory.types.push(trouveType);
-    if (joueur.repeatHistory.types.length > 3) joueur.repeatHistory.types.shift();
+function validerTirTexte(texte, joueur) {
+  texte = texte.toLowerCase();
+  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
+  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
+
+  const trouveType = tir_types.find(t => texte.includes(t));
+  const trouveZone = tir_zones.find(z => texte.includes(z));
+  let valide = !!trouveType && !!trouveZone;
+  let raisonRefus = "";
+
+  // --- Initialisation de l'historique ---
+  if (!joueur.repeatHistory) {
+    joueur.repeatHistory = { derniersPaves: [] };
   }
 
-  if (trouveZone) {
-    joueur.repeatHistory.zones.push(trouveZone);
-    if (joueur.repeatHistory.zones.length > 3) joueur.repeatHistory.zones.shift();
+  // --- Gestion des pavés répétés ---
+  const pavé = texte.trim();
+  const derniers = joueur.repeatHistory.derniersPaves;
+
+  // On garde en mémoire les 3 derniers pavés
+  derniers.push(pavé);
+  if (derniers.length > 3) derniers.shift();
+
+  // Vérifier si pavé répété
+  const repetitionCount =
+    derniers.length >= 2 && derniers[derniers.length - 1] === derniers[derniers.length - 2]
+      ? (derniers.length >= 3 && derniers[derniers.length - 2] === derniers[derniers.length - 3] ? 3 : 2)
+      : 1;
+
+  // --- ⚡ Réinitialisation après 2 tirs différents ---
+  if (derniers.length >= 2 && derniers[derniers.length - 1] !== derniers[derniers.length - 2]) {
+    joueur.repeatHistory.derniersPaves = [pavé];
   }
 
-  // --- 🚫 Blocage si 3 tirs identiques consécutifs ---
-  const typesDerniers = joueur.repeatHistory.types.slice(-3);
-  if (typesDerniers.length === 3 && typesDerniers.every(t => t === typesDerniers[0])) {
-    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! 3ᵉ tir_type identique consécutif." };
+  // --- 🎯 Application des chances selon répétition ---
+  let chance = 100;
+  if (repetitionCount === 1) chance = 90;
+  else if (repetitionCount === 2) chance = 60;
+  else if (repetitionCount === 3) chance = 10;
+
+  // Tir aléatoire basé sur la chance
+  const tirReussi = Math.random() * 100 < chance;
+
+  if (!tirReussi) {
+    return { valide: false, missed: true, raisonRefus: `❌ Missed Goal! (probabilité ${chance}%)` };
   }
 
-  const zonesDerniers = joueur.repeatHistory.zones.slice(-3);
-  if (zonesDerniers.length === 3 && zonesDerniers.every(z => z === zonesDerniers[0])) {
-    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! 3ᵉ tir_zone identique consécutif." };
+  // --- ⚠️ Tir incomplet ---
+  if (texte.includes("tir") && (!trouveType || !trouveZone)) {
+    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir incomplet." };
   }
 
-  // --- ♻️ Réinitialisation logique : après 2 tirs différents ---
-  const derniersTypes = joueur.repeatHistory.types.slice(-2);
-  if (derniersTypes.length === 2 && derniersTypes[0] !== derniersTypes[1]) {
-    // Deux tirs différents -> on autorise à nouveau les doubles répétitions
-    joueur.repeatHistory.types = [derniersTypes[1]];
+  // --- ⚽ Cas spéciaux trivela / enroulé ---
+  function courbeValide(txt) {
+    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(\.\d+)?) ?(m|cm)/);
+    if (!match) return false;
+    let val = parseFloat(match[2]);
+    if (match[4] === "cm") val /= 100;
+    return val <= 2;
   }
 
-  const derniersZones = joueur.repeatHistory.zones.slice(-2);
-  if (derniersZones.length === 2 && derniersZones[0] !== derniersZones[1]) {
-    joueur.repeatHistory.zones = [derniersZones[1]];
+  const checkSpecial = (typeTir, pied, corpsAttendu) => {
+    const corpsOk = texte.includes(corpsAttendu);
+    const courbeOk = courbeValide(texte);
+    if (!corpsOk || !courbeOk) {
+      valide = false;
+      raisonRefus = `❌ ${typeTir} ${pied} invalide : corps ${corpsAttendu} + courbe ≤ 2m.`;
+    }
+  };
+
+  if (texte.includes("trivela")) {
+    if (texte.includes("pied droit")) checkSpecial("Trivela", "pied droit", "60° à gauche");
+    else if (texte.includes("pied gauche")) checkSpecial("Trivela", "pied gauche", "60° à droite");
   }
+
+  if (texte.includes("tir enroulé")) {
+    if (texte.includes("pied droit")) checkSpecial("Enroulé", "pied droit", "60° à droite");
+    else if (texte.includes("pied gauche")) checkSpecial("Enroulé", "pied gauche", "60° à gauche");
+  }
+
+  if (!valide) return { valide: false, missed: true, raisonRefus };
+  return { valide: true, missed: false, tir_type: trouveType, tir_zone: trouveZone };
+}
 
   // --- ⚠️ Tir incomplet ---
   if (texte.includes("tir") && (!trouveType || !trouveZone)) {
