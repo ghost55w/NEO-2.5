@@ -135,118 +135,76 @@ async function montrerAnalyseEnCours(ms_org, ovl) {
   await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
 }
 
-  // Vérification obligatoire
-  if (!trouveType || !trouvePartie || !trouveZone) {
-    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir incomplet." };
-  }
-
-  // Initialiser historique de répétition si absent
-  if (!joueur.repeatHistory) {
-    joueur.repeatHistory = { types: [], zones: [] };
-  }
-
-  // Gestion des répétitions tir_type
-  const updateProb = (history, current) => {
-    history.push(current);
-    if (history.length > 4) history.shift(); // garder max 4 derniers
-
-    let count = 1;
-    for (let i = history.length - 2; i >= 0; i--) {
-      if (history[i] === current) count++;
-      else break;
-    }
-    return count;
-  };
-
-  const tirTypeCount = updateProb(joueur.repeatHistory.types, trouveType);
-  const tirZoneCount = updateProb(joueur.repeatHistory.zones, trouveZone);
-
-  const chanceSelonRepetition = (count) => {
-    switch (count) {
-      case 1: return 1.0;   // 100%
-      case 2: return 0.9;   // 90%
-      case 3: return 0.7;   // 70%
-      default: return 0.1;  // 4ᵉ ou plus → 10%
-    }
-  };
-
-  // Tir aléatoire basé sur répétition
-  const random = Math.random();
-  const typeOk = random <= chanceSelonRepetition(tirTypeCount);
-  const zoneOk = random <= chanceSelonRepetition(tirZoneCount);
-
-  let valide = typeOk && zoneOk;
-  let raisonRefus = "";
-  if (!valide) raisonRefus = "❌ Missed Goal! Probabilité réduite par répétition.";
-
-  // Cas spéciaux Trivela / Tir enroulé
-  function courbeValide(txt) {
-    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(.\d+)?) ?(m|cm)/);
-    if (!match) return false;
-    let val = parseFloat(match[2]);
-    if (match[4] === "cm") val /= 100;
-    return val <= 2;
-  }
-
-  const checkSpecial = (typeTir, pied, corpsAttendu) => {
-    const corpsOk = texte.includes(corpsAttendu);
-    const courbeOk = courbeValide(texte);
-    if (!corpsOk || !courbeOk) {
-      valide = false;
-      raisonRefus = `❌ ${typeTir} ${pied} invalide : corps ${corpsAttendu} + courbe ≤ 2m.`;
-    }
-  };
-
-  if (texte.includes("trivela")) {
-    if (texte.includes("pied droit")) checkSpecial("Trivela", "pied droit", "60° à gauche");
-    else if (texte.includes("pied gauche")) checkSpecial("Trivela", "pied gauche", "60° à droite");
-  }
-
-  if (texte.includes("tir enroulé")) {
-    if (texte.includes("pied droit")) checkSpecial("Enroulé", "pied droit", "60° à droite");
-    else if (texte.includes("pied gauche")) checkSpecial("Enroulé", "pied gauche", "60° à gauche");
-  }
-
+  // Vérification obligatoire : tir_type + tir_partie + tir_zone doivent tous être présents
+if (!trouveType || !trouvePartie || !trouveZone) {
   return { 
-    valide, 
-    raisonRefus, 
-    missed: !valide, 
-    tir_type: trouveType, 
-    tir_partie: trouvePartie, 
-    tir_zone: trouveZone 
+    valide: false, 
+    missed: true, 
+    raisonRefus: "❌ Missed Goal! Tir incomplet : tir_type + tir_partie + tir_zone requis." 
   };
+}
 
-  // Initialiser l'historique si absent
-  if (!joueur.repeatHistory) {
-    joueur.repeatHistory = { types: [], zones: [] };
+// Initialiser historique si absent
+if (!joueur.repeatHistory) {
+  joueur.repeatHistory = { pavés: [] };
+}
+
+const currentPave = `${trouveType}|${trouvePartie}|${trouveZone}`;
+
+// Vérification répétition immédiate du même pavé
+const lastPave = joueur.repeatHistory.pavés[joueur.repeatHistory.pavés.length - 1];
+if (lastPave === currentPave) {
+  joueur.repeatHistory.pavés.push(currentPave); // on stock quand même
+  return {
+    valide: false,
+    missed: true,
+    raisonRefus: "❌ Missed Goal! Même tir_type + tir_zone répété deux fois de suite."
+  };
+}
+
+// Stocker le pavé actuel
+joueur.repeatHistory.pavés.push(currentPave);
+if (joueur.repeatHistory.pavés.length > 20) joueur.repeatHistory.pavés.shift(); // limiter historique
+
+// Cas spéciaux Trivela / Tir enroulé
+function courbeValide(txt) {
+  const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(.\d+)?) ?(m|cm)/);
+  if (!match) return false;
+  let val = parseFloat(match[2]);
+  if (match[4] === "cm") val /= 100;
+  return val <= 2;
+}
+
+let valide = true;
+let raisonRefus = "";
+
+const checkSpecial = (typeTir, pied, corpsAttendu) => {
+  const corpsOk = texte.includes(corpsAttendu);
+  const courbeOk = courbeValide(texte);
+  if (!corpsOk || !courbeOk) {
+    valide = false;
+    raisonRefus = `❌ ${typeTir} ${pied} invalide : corps ${corpsAttendu} + courbe ≤ 2m.`;
   }
+};
 
-function validerTirTexte(texte, joueur) {
-  texte = texte.toLowerCase();
-  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
-  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
+if (texte.includes("trivela")) {
+  if (texte.includes("pied droit")) checkSpecial("Trivela", "pied droit", "60° à gauche");
+  else if (texte.includes("pied gauche")) checkSpecial("Trivela", "pied gauche", "60° à droite");
+}
 
-  const trouveType = tir_types.find(t => texte.includes(t));
-  const trouveZone = tir_zones.find(z => texte.includes(z));
-  let valide = !!trouveType && !!trouveZone;
-  let raisonRefus = "";
+if (texte.includes("tir enroulé")) {
+  if (texte.includes("pied droit")) checkSpecial("Enroulé", "pied droit", "60° à droite");
+  else if (texte.includes("pied gauche")) checkSpecial("Enroulé", "pied gauche", "60° à gauche");
+}
 
-  // --- Initialisation de l'historique ---
-  if (!joueur.repeatHistory) {
-    joueur.repeatHistory = { derniersPaves: [] };
-  }
-
- function validerTirTexte(texte, joueur) {
-  texte = texte.toLowerCase();
-
-  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
-  const tir_parties = ["intérieur du pied", "extérieur du pied", "cou de pied", "pointe du pied", "talon", "tête"];
-  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
-
-  const trouveType = tir_types.find(t => texte.includes(t));
-  const trouvePartie = tir_parties.find(t => texte.includes(t));
-  const trouveZone = tir_zones.find(z => texte.includes(z));
-
+return {
+  valide,
+  raisonRefus,
+  missed: !valide,
+  tir_type: trouveType,
+  tir_partie: trouvePartie,
+  tir_zone: trouveZone
+};
    
 // Calcul classement
 function calculerClassement() {
