@@ -256,16 +256,89 @@ function validerTirTexte(texte, joueur) {
   return { valide, raisonRefus, missed: false, tir_type: trouveType, tir_partie: trouvePartie, tir_zone: trouveZone };
 }
 
-// Fonction pour montrer que le bot analyse le tir en "temps réel"
+// Fonction pour montrer l'analyse en cours
 async function montrerAnalyseEnCours(ms_org, ovl) {
-  // On envoie un emoji ⚽ pour signaler que le bot "analyse"
-  const analyseMsg = await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
+  // Envoie un emoji ⚽ pour indiquer que l'analyse du pavé est en cours
+  await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
+}
+                                                    
+function validerTirTexte(texte, joueur) {
+  texte = texte.toLowerCase();
+  const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
+  const tir_zones = ["ras du sol gauche", "ras du sol droite", "ras du sol milieu", "mi-hauteur gauche", "mi-hauteur droite", "lucarne gauche", "lucarne droite", "milieu"];
 
-  // Optionnel : si la plateforme le permet, on peut animer ou remplacer l'emoji après l'analyse
-  // return analyseMsg pour pouvoir mettre à jour le message plus tard si nécessaire
-  return analyseMsg;
-                                                    }
+  const trouveType = tir_types.find(t => texte.includes(t));
+  const trouveZone = tir_zones.find(z => texte.includes(z));
 
+  let valide = !!trouveType && !!trouveZone;
+  let raisonRefus = "";
+
+  if (!joueur.repeatHistory) {
+    joueur.repeatHistory = { types: [], zones: [] };
+  }
+
+  // Ajouter le tir actuel à l'historique de répétition
+  if (trouveType) {
+    joueur.repeatHistory.types.push(trouveType);
+    // garder seulement les 3 derniers
+    if (joueur.repeatHistory.types.length > 3) joueur.repeatHistory.types.shift();
+  }
+  if (trouveZone) {
+    joueur.repeatHistory.zones.push(trouveZone);
+    if (joueur.repeatHistory.zones.length > 3) joueur.repeatHistory.zones.shift();
+  }
+
+  // Vérifier répétition 3 fois consécutives tir_type
+  const typesDerniers = joueur.repeatHistory.types.slice(-3);
+  if (typesDerniers.length === 3 && typesDerniers[0] === typesDerniers[1] && typesDerniers[1] === typesDerniers[2]) {
+    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! 3ᵉ tir_type identique consécutif." };
+  }
+
+  // Vérifier répétition 3 fois consécutives tir_zone
+  const zonesDerniers = joueur.repeatHistory.zones.slice(-3);
+  if (zonesDerniers.length === 3 && zonesDerniers[0] === zonesDerniers[1] && zonesDerniers[1] === zonesDerniers[2]) {
+    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! 3ᵉ tir_zone identique consécutif." };
+  }
+
+  // Réinitialiser les compteurs si au moins deux tirs différents ont été effectués
+  if (new Set(joueur.repeatHistory.types).size >= 2) joueur.repeatHistory.types = [typesDerniers[typesDerniers.length - 1]];
+  if (new Set(joueur.repeatHistory.zones).size >= 2) joueur.repeatHistory.zones = [zonesDerniers[zonesDerniers.length - 1]];
+
+  // Tir incomplet
+  if (texte.includes("tir") && (!trouveType || !trouveZone)) {
+    return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir incomplet." };
+  }
+
+  // Cas spéciaux trivela / enroulé
+  function courbeValide(txt) {
+    const match = txt.match(/courb(e|ure)?.{0,10}?(\d+(\.\d+)?) ?(m|cm)/);
+    if (!match) return false;
+    let val = parseFloat(match[2]);
+    if (match[4] === "cm") val /= 100;
+    return val <= 2;
+  }
+
+  const checkSpecial = (typeTir, pied, corpsAttendu) => {
+    const corpsOk = texte.includes(corpsAttendu);
+    const courbeOk = courbeValide(texte);
+    if (!corpsOk || !courbeOk) {
+      valide = false;
+      raisonRefus = `❌ ${typeTir} ${pied} invalide : corps ${corpsAttendu} + courbe ≤ 2m.`;
+    }
+  };
+
+  if (texte.includes("trivela")) {
+    if (texte.includes("pied droit")) checkSpecial("Trivela", "pied droit", "60° à gauche");
+    else if (texte.includes("pied gauche")) checkSpecial("Trivela", "pied gauche", "60° à droite");
+  }
+
+  if (texte.includes("tir enroulé")) {
+    if (texte.includes("pied droit")) checkSpecial("Enroulé", "pied droit", "60° à droite");
+    else if (texte.includes("pied gauche")) checkSpecial("Enroulé", "pied gauche", "60° à gauche");
+  }
+
+  return { valide, raisonRefus, missed: false, tir_type: trouveType, tir_zone: trouveZone };
+}
 
 // Calcul classement
 function calculerClassement() {
