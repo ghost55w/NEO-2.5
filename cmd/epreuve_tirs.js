@@ -42,13 +42,13 @@ async function analyserTir(texte, repondre) {
   return null;
 }
 
-// Fonction de validation locale
+/* ✅ Fonction de validation locale ultra-détaillée */
 function validerTirTexte(texte) {
   texte = texte.toLowerCase();
 
   const tir_types = [
     "tir direct", "tir enroulé", "tir piqué", "tir croisé",
-    "trivela", "extérieur du pied", "extérieur", "intérieur du pied"
+    "trivela", "extérieur du pied", "intérieur du pied"
   ];
   const tir_parties = [
     "intérieur du pied", "extérieur du pied", "cou de pied", "pointe du pied", "talon", "tête"
@@ -63,11 +63,55 @@ function validerTirTexte(texte) {
   const trouvePartie = tir_parties.some(t => texte.includes(t));
   const trouveZone = tir_zones.some(t => texte.includes(t));
 
+  let valide = trouveType && trouvePartie && trouveZone;
+  let raisonRefus = "";
+
+  // 🎯 Conditions spéciales trivela
+  if (texte.includes("trivela")) {
+    if (texte.includes("pied droit")) {
+      const corpsOk = texte.includes("60° à gauche") || texte.includes("60 degres à gauche");
+      const courbeOk = /courb(e|ure)?.{0,10}2 ?m/.test(texte);
+      if (!corpsOk || !courbeOk) {
+        valide = false;
+        raisonRefus = "❌Trivela du pied droit incorrect : le corps doit être décalé de 60° à gauche et la courbe ≤ 2m.";
+      }
+    }
+    if (texte.includes("pied gauche")) {
+      const corpsOk = texte.includes("60° à droite") || texte.includes("60 degres à droite");
+      const courbeOk = /courb(e|ure)?.{0,10}2 ?m/.test(texte);
+      if (!corpsOk || !courbeOk) {
+        valide = false;
+        raisonRefus = "❌Trivela du pied gauche incorrect : le corps doit être décalé de 60° à droite et la courbe ≤ 2m.";
+      }
+    }
+  }
+
+  // 🎯 Conditions spéciales tir enroulé
+  if (texte.includes("tir enroulé")) {
+    if (texte.includes("pied droit")) {
+      const corpsOk = texte.includes("60° à droite") || texte.includes("60 degres à droite");
+      const courbeOk = /courb(e|ure)?.{0,10}2 ?m/.test(texte);
+      if (!corpsOk || !courbeOk) {
+        valide = false;
+        raisonRefus = "❌Tir enroulé du pied droit incorrect : le corps doit être décalé de 60° à droite et la courbe ≤ 2m.";
+      }
+    }
+    if (texte.includes("pied gauche")) {
+      const corpsOk = texte.includes("60° à gauche") || texte.includes("60 degres à gauche");
+      const courbeOk = /courb(e|ure)?.{0,10}2 ?m/.test(texte);
+      if (!corpsOk || !courbeOk) {
+        valide = false;
+        raisonRefus = "❌Tir enroulé du pied gauche incorrect : le corps doit être décalé de 60° à gauche et la courbe ≤ 2m.";
+      }
+    }
+  }
+
   return {
     trouveType,
     trouvePartie,
     trouveZone,
-    valide: trouveType && trouvePartie && trouveZone
+    valide,
+    raisonRefus
   };
 }
 
@@ -81,31 +125,18 @@ ovlcmd({
     await ovl.sendMessage(ms_org, {
       video: { url: 'https://files.catbox.moe/z64kuq.mp4' },
       gifPlayback: true,
-      loop: true,
-      caption: ''
+      loop: true
     });
 
     const texteDebut = `*🔷ÉPREUVE DE TIRS⚽🥅*
 ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔░▒▒▒▒░░▒░
 
-                   🔷⚽RÈGLES:
-Dans cet exercice l'objectif est de marquer 18 buts en 18 tirs max dans le temps imparti ❗20 mins⌛ face à un gardien Robot qui  mémorise vos tirs pour bloquer le même tir de suite. ⚠Vous devez marquer au moins 6 buts sinon vous êtes éliminé ❌. 
-
-⚠SI VOUS RATEZ UN TIR, FIN DE L'EXERCICE ❌.
-
-▔▔▔▔▔▔▔ 🔷RANKING🏆 ▔▔▔▔▔▔▔  
-                       
-🥉Novice: 6 buts⚽ (25 pts) 
-🥈Pro: 12 buts⚽ (50 pts) 
-🥇Classe mondiale: 18 buts⚽🏆(100 pts) 
-
-▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔░ ░                         
-
-Souhaitez-vous lancer l'exercice ? :
-✅ Oui
-❌ Non
-
-                         ⚽BLUE🔷LOCK`;
+⚽RÈGLES SPÉCIALES :
+- Tir *Trivela* : pied droit → corps 60° à gauche, courbe ≤ 2m
+- Tir *Trivela* : pied gauche → corps 60° à droite, courbe ≤ 2m
+- Tir *Enroulé* : pied droit → corps 60° à droite, courbe ≤ 2m
+- Tir *Enroulé* : pied gauche → corps 60° à gauche, courbe ≤ 2m
+`;
 
     await ovl.sendMessage(ms_org, {
       image: { url: 'https://files.catbox.moe/09rll9.jpg' },
@@ -115,7 +146,7 @@ Souhaitez-vous lancer l'exercice ? :
     const rep = await ovl.recup_msg({ auteur: auteur_Message, ms_org, temps: 60000 });
     const response = rep?.message?.extendedTextMessage?.text || rep?.message?.conversation;
     if (!response) return repondre("⏳Pas de réponse, épreuve annulée.");
-    if (response.toLowerCase() === "non") return repondre("❌ Lancement de l'exercice annulé...");
+    if (response.toLowerCase() === "non") return repondre("❌ Lancement annulé.");
 
     if (response.toLowerCase() === "oui") {
       const id = auteur_Message;
@@ -132,9 +163,7 @@ Souhaitez-vous lancer l'exercice ? :
         but: 0,
         tirs_total: 0,
         en_cours: true,
-        timer,
-        paused: false,
-        remainingTime: 20 * 60 * 1000
+        timer
       });
 
       await ovl.sendMessage(ms_org, {
@@ -167,26 +196,17 @@ ovlcmd({
       video: { url: "https://files.catbox.moe/9k5b3v.mp4" },
       gifPlayback: true,
       loop: true,
-      caption: "❌MISSED! : Tir incomplet — type, partie ou zone non reconnue."
+      caption: validation.raisonRefus || "❌MISSED! : Tir incomplet ou non valide."
     });
     return envoyerResultats(ms_org, ovl, joueur);
   }
 
   const analyse = await analyserTir(texte, repondre);
-  if (!analyse || !analyse.tir_type || !analyse.tir_partie || !analyse.tir_zone) {
-    clearTimeout(joueur.timer);
-    joueur.en_cours = false;
-    await ovl.sendMessage(ms_org, {
-      video: { url: "https://files.catbox.moe/9k5b3v.mp4" },
-      gifPlayback: true,
-      loop: true,
-      caption: "❌MISSED! : Tir non reconnu par le système."
-    });
-    return envoyerResultats(ms_org, ovl, joueur);
-  }
+  if (!analyse) return repondre("⚠️ Tir non reconnu.");
 
   joueur.tirs_total++;
   const tir_courant = { tir_type: analyse.tir_type, tir_partie: analyse.tir_partie, tir_zone: analyse.tir_zone };
+
   const tir_repeté = joueur.tir_info.some(
     t => t.tir_type === tir_courant.tir_type &&
          t.tir_zone === tir_courant.tir_zone &&
@@ -200,7 +220,7 @@ ovlcmd({
       video: { url: "https://files.catbox.moe/9k5b3v.mp4" },
       gifPlayback: true,
       loop: true,
-      caption: "❌MISSED! : Tir répété — le gardien l'arrête facilement."
+      caption: "❌MISSED! : Tir répété — gardien vigilant."
     });
     return envoyerResultats(ms_org, ovl, joueur);
   }
