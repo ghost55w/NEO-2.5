@@ -129,8 +129,11 @@ Souhaitez-vous lancer l'exercice ? :
   }
 });
 
-// ⚽ emoji : analyse en cours
+// Fonction pour montrer l'analyse en cours
+async function montrerAnalyseEnCours(ms_org, ovl) {
+  // Envoie un emoji ⚽ pour indiquer que l'analyse du pavé est en cours
   await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
+}
 
 // Validation du tir + conditions spéciales
 function validerTirTexte(texte) {
@@ -209,17 +212,6 @@ function validerTirTexte(texte, joueur) {
   const trouvePartie = tir_parties.find(t => texte.includes(t));
   const trouveZone = tir_zones.find(t => texte.includes(t));
 
-  // Vérification répétition tir_type / tir_zone
-  const dernierTir = joueur.historique?.[joueur.historique.length - 2];
-  if (dernierTir) {
-    if (trouveType && dernierTir.tir_type === trouveType) {
-      return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir_type répété." };
-    }
-    if (trouveZone && dernierTir.tir_zone === trouveZone) {
-      return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir_zone répété." };
-    }
-  }
-
   let valide = trouveType && trouveZone;
   let raisonRefus = "";
 
@@ -257,13 +249,7 @@ function validerTirTexte(texte, joueur) {
 
   return { valide, raisonRefus, missed: false, tir_type: trouveType, tir_partie: trouvePartie, tir_zone: trouveZone };
 }
-
-// Fonction pour montrer l'analyse en cours
-async function montrerAnalyseEnCours(ms_org, ovl) {
-  // Envoie un emoji ⚽ pour indiquer que l'analyse du pavé est en cours
-  await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
-}
-                                                    
+                                                   
 function validerTirTexte(texte, joueur) {
   texte = texte.toLowerCase();
   const tir_types = ["tir direct", "tir enroulé", "tir piqué", "tir croisé", "trivela"];
