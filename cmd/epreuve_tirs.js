@@ -129,6 +129,8 @@ Souhaitez-vous lancer l'exercice ? :
   }
 });
 
+  // ⚽ emoji : analyse en cours
+  await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
 
 // Validation du tir + conditions spéciales
 function validerTirTexte(texte) {
@@ -206,17 +208,6 @@ function validerTirTexte(texte, joueur) {
   const trouveType = tir_types.find(t => texte.includes(t));
   const trouvePartie = tir_parties.find(t => texte.includes(t));
   const trouveZone = tir_zones.find(t => texte.includes(t));
-
-  // Vérification répétition tir_type / tir_zone
-  const dernierTir = joueur.historique?.[joueur.historique.length - 2];
-  if (dernierTir) {
-    if (trouveType && dernierTir.tir_type === trouveType) {
-      return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir_type répété." };
-    }
-    if (trouveZone && dernierTir.tir_zone === trouveZone) {
-      return { valide: false, missed: true, raisonRefus: "❌ Missed Goal! Tir_zone répété." };
-    }
-  }
 
   let valide = trouveType && trouveZone;
   let raisonRefus = "";
@@ -398,17 +389,6 @@ ovlcmd({ nom: "tir", categorie: "football" }, async (ctx) => {
   const { ms_org, text, sender } = ctx;
   const joueur = joueurs.get(sender) || { id: sender };
 
-
-  // ⚽ emoji : analyse en cours
-  await ovl.sendMessage(ms_org, { react: { text: '⚽' } });
-
-  // Vérifier pavé trop rapide et copier-collé
-  if (estCopieColleRapide(joueur, text)) {
-    await ovl.sendMessage(ms_org, { text: "❌ Missed Goal! Pavé copié-collé détecté.", react: { text: "⚠️" } });
-    return;
-  }
-
-  
 // Calcul classement
 function calculerClassement() {
   return Array.from(joueurs.values())
