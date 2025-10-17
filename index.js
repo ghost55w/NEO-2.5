@@ -138,3 +138,4 @@ function setupAutoPing(url) {
 process.on('uncaughtException', async (e) => {
   console.error('Une erreur inattendue est survenue :', e);
 });
+fix: remove pm2 for Render compatibility
