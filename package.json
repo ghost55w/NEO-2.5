@@ -4,7 +4,7 @@
   "description": "Bot WhatsApp multi-appareil développé par Ainz",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "pm2 start index.js --attach --name neo-bot",
     "stop": "pm2 stop all"
   },
   "keywords": ["Ainz", "NEO-BOT", "Whatsapp", "Baileys", "Neoverse"],
@@ -22,7 +22,4 @@
     "sequelize": "^6.37.5",
     "sqlite3": "^5.1.7"
   }
-}
-"engines": {
-  "node": ">=18.0.0"
 }
